@@ -1,0 +1,36 @@
+[project]
+name = "ai-podcast-creator"
+version = "1.0.0"
+description = "AI-powered multi-voice podcast creator using ElevenLabs and OpenAI"
+authors = [{ name = "AI Podcast Creator", email = "creator@aipodcast.ai" }]
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+dependencies = [
+    "pydantic>=2.10.6",
+    "restack-ai==0.0.62",
+    "watchfiles>=1.0.4",
+    "python-dotenv==1.0.1",
+    "openai>=1.61.0",
+    "elevenlabs>=1.50.6",
+    "streamlit==1.40.0",
+    "pydub>=0.25.1",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+dev = "src.services:watch_services"
+services = "src.services:run_services"
+ui = "frontend.app:main"
+
+[dependency-groups]
+dev = ["pytest==6.2"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "frontend"]
+
+[tool.hatch.build.targets.wheel]
+include = ["src", "frontend"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
