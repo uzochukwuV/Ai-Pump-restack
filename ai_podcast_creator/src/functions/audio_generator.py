@@ -87,6 +87,8 @@ async def merge_audio_segments(input: dict) -> dict:
         input (dict): A dictionary containing:
             - segments (list): List of base64-encoded audio segments
             - output_filename (str, optional): Output filename
+            - background_music (str, optional): Background music track ID
+            - music_volume (float, optional): Music volume (0.0-1.0), default 0.25
 
     Returns:
         dict: A dictionary containing the merged audio file path and base64
@@ -96,6 +98,8 @@ async def merge_audio_segments(input: dict) -> dict:
 
         segments = input.get("segments", [])
         output_filename = input.get("output_filename", "podcast.mp3")
+        background_music = input.get("background_music")
+        music_volume = input.get("music_volume", 0.25)  # 25% volume by default
 
         if not segments:
             raise ValueError("No segments to merge")
@@ -123,6 +127,15 @@ async def merge_audio_segments(input: dict) -> dict:
 
             log.info(f"Added segment {i+1}/{len(segments)}")
 
+        # Add background music if requested
+        if background_music:
+            log.info(f"Adding background music: {background_music}")
+            combined = await _add_background_music(
+                voice_audio=combined,
+                music_track_id=background_music,
+                music_volume=music_volume
+            )
+
         # Create output directory if it doesn't exist
         output_dir = os.path.join(os.getcwd(), "output")
         os.makedirs(output_dir, exist_ok=True)
@@ -141,7 +154,8 @@ async def merge_audio_segments(input: dict) -> dict:
         log.info(
             "Audio merge successful",
             output_path=output_path,
-            duration_seconds=duration_seconds
+            duration_seconds=duration_seconds,
+            background_music=background_music
         )
 
         return {
@@ -154,3 +168,80 @@ async def merge_audio_segments(input: dict) -> dict:
     except Exception as e:
         log.error("merge_audio_segments failed", error=str(e))
         raise e
+
+
+async def _add_background_music(voice_audio, music_track_id: str, music_volume: float):
+    """
+    Add background music to voice audio.
+
+    Args:
+        voice_audio: AudioSegment with voice content
+        music_track_id: ID of the music track to use
+        music_volume: Volume level for music (0.0-1.0)
+
+    Returns:
+        AudioSegment with background music mixed in
+    """
+    try:
+        from pydub import AudioSegment
+        from src.utils.music_library import get_music_track
+
+        # Get music track info
+        track = get_music_track(music_track_id)
+        if not track:
+            log.warning(f"Music track {music_track_id} not found, skipping background music")
+            return voice_audio
+
+        # Build path to music file
+        music_path = os.path.join(os.getcwd(), "assets", "music", track.filename)
+
+        # Check if music file exists
+        if not os.path.exists(music_path):
+            log.warning(
+                f"Music file not found: {music_path}. "
+                "Skipping background music. See assets/music/README.md for download instructions."
+            )
+            return voice_audio
+
+        # Load background music
+        log.info(f"Loading background music from {music_path}")
+        background = AudioSegment.from_mp3(music_path)
+
+        # Get duration of voice audio
+        voice_duration_ms = len(voice_audio)
+
+        # Loop music if voice is longer than music
+        if len(background) < voice_duration_ms:
+            # Calculate how many times to loop
+            loops_needed = (voice_duration_ms // len(background)) + 1
+            background = background * loops_needed
+            log.info(f"Looped background music {loops_needed} times")
+
+        # Trim music to match voice duration
+        background = background[:voice_duration_ms]
+
+        # Reduce music volume (make it quieter than voice)
+        # Convert volume from 0-1 scale to dB reduction
+        # music_volume=0.25 means reduce by ~12dB
+        db_reduction = -20 * (1 - music_volume)  # Logarithmic scaling
+        background = background + db_reduction
+
+        log.info(f"Reduced music volume by {abs(db_reduction):.1f}dB")
+
+        # Add fade in at the beginning (3 seconds)
+        background = background.fade_in(3000)
+
+        # Add fade out at the end (3 seconds)
+        background = background.fade_out(3000)
+
+        # Mix voice and music
+        # Overlay keeps voice audio on top
+        mixed = background.overlay(voice_audio)
+
+        log.info("Successfully mixed background music with voice")
+        return mixed
+
+    except Exception as e:
+        log.error(f"Failed to add background music: {str(e)}")
+        log.warning("Returning voice audio without background music")
+        return voice_audio

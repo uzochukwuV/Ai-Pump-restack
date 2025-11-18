@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.client import client
 from src.workflows.podcast_workflow import PodcastCreatorWorkflow
+from src.utils.music_library import list_all_tracks, get_recommended_music, get_music_track
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -140,6 +141,77 @@ SPEAKER_1 (Host): Let's dive into today's topic...""",
             help="Name for the generated podcast file"
         )
 
+    # Background Music Section
+    st.markdown("---")
+    st.subheader("🎵 Background Music (NEW!)")
+
+    add_music = st.checkbox(
+        "Add Background Music",
+        value=False,
+        help="Add professional background music to your podcast"
+    )
+
+    background_music = None
+    music_volume = 0.25
+
+    if add_music:
+        col_music_a, col_music_b = st.columns(2)
+
+        with col_music_a:
+            # Get all available music tracks
+            all_tracks = list_all_tracks()
+            music_options = {
+                "None": None,
+                **{track.name: track.id for track in all_tracks}
+            }
+
+            # Get recommended tracks based on style
+            recommended = get_recommended_music(style)
+            recommended_names = [
+                get_music_track(track_id).name
+                for track_id in recommended
+                if get_music_track(track_id)
+            ]
+
+            # Show recommendations
+            if recommended_names:
+                st.caption(f"💡 Recommended for {style}: {', '.join(recommended_names)}")
+
+            selected_music_name = st.selectbox(
+                "Choose Music Track",
+                options=list(music_options.keys()),
+                index=1 if len(music_options) > 1 else 0,
+                help="Select background music that matches your podcast style"
+            )
+
+            background_music = music_options[selected_music_name]
+
+        with col_music_b:
+            music_volume = st.slider(
+                "Music Volume",
+                min_value=0.1,
+                max_value=0.5,
+                value=0.25,
+                step=0.05,
+                help="Adjust background music volume (voice will always be louder)"
+            )
+
+            st.caption(f"Music at {int(music_volume * 100)}% volume")
+
+        # Show music track details if selected
+        if background_music:
+            track = get_music_track(background_music)
+            if track:
+                st.info(f"**{track.name}**\n\n{track.description}\n\n*Mood:* {track.mood} | *Energy:* {track.energy}")
+
+                # Check if music file exists
+                music_path = os.path.join(os.getcwd(), "assets", "music", track.filename)
+                if not os.path.exists(music_path):
+                    st.warning(
+                        f"⚠️ Music file not found: `{track.filename}`\n\n"
+                        "See `assets/music/README.md` for download instructions."
+                    )
+
 with col2:
     st.subheader("ℹ️ About")
     st.info(
@@ -193,7 +265,9 @@ async def generate_podcast():
                 "duration": duration,
                 "num_speakers": num_speakers,
                 "custom_script": custom_script,
-                "output_filename": output_filename
+                "output_filename": output_filename,
+                "background_music": background_music,
+                "music_volume": music_volume
             }
         )
 

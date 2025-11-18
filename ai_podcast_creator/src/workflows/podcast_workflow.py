@@ -29,6 +29,8 @@ class PodcastCreatorWorkflow:
         - duration: Target duration in minutes
         - num_speakers: Number of speakers (2-4)
         - custom_script: If True, topic is treated as a pre-written script
+        - background_music: Background music track ID (optional)
+        - music_volume: Music volume level 0.0-1.0 (optional, default 0.25)
 
     Output:
         - output_path: Path to the generated podcast MP3
@@ -47,6 +49,8 @@ class PodcastCreatorWorkflow:
         num_speakers = input.get("num_speakers", 2)
         custom_script = input.get("custom_script", False)
         output_filename = input.get("output_filename", "podcast.mp3")
+        background_music = input.get("background_music")  # Optional music track ID
+        music_volume = input.get("music_volume", 0.25)  # Default 25% volume
 
         # Get API keys from environment
         openai_key = os.getenv("OPENAI_API_KEY")
@@ -127,13 +131,15 @@ class PodcastCreatorWorkflow:
 
             audio_segments.append(audio_result["audio_base64"])
 
-        # Step 4: Merge all audio segments
-        log.info("Merging audio segments")
+        # Step 4: Merge all audio segments (with optional background music)
+        log.info("Merging audio segments", background_music=background_music)
         merge_result = await workflow.step(
             merge_audio_segments,
             input={
                 "segments": audio_segments,
-                "output_filename": output_filename
+                "output_filename": output_filename,
+                "background_music": background_music,
+                "music_volume": music_volume
             },
             start_to_close_timeout=timedelta(seconds=120)
         )
