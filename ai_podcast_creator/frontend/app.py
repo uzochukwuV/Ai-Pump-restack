@@ -141,9 +141,60 @@ SPEAKER_1 (Host): Let's dive into today's topic...""",
             help="Name for the generated podcast file"
         )
 
+    # Voice Preview Section
+    st.markdown("---")
+    st.subheader("👂 Voice Preview (NEW!)")
+
+    preview_voices_section = st.expander("🎧 Preview Voices Before Generating", expanded=False)
+
+    with preview_voices_section:
+        st.info("Listen to sample audio for each voice that will be used in your podcast.")
+
+        from src.utils.voice_config import get_voice_for_speaker
+        from src.functions.audio_generator import PREVIEW_TEXTS
+
+        # Generate preview for each speaker
+        for speaker_num in range(num_speakers):
+            voice_id = get_voice_for_speaker(speaker_num, style)
+
+            st.markdown(f"**Speaker {speaker_num + 1}**")
+
+            col_preview_a, col_preview_b = st.columns([3, 1])
+
+            with col_preview_a:
+                preview_text = PREVIEW_TEXTS.get(style, PREVIEW_TEXTS["casual"])
+                st.caption(f'Sample: "{preview_text[:80]}..."')
+                st.caption(f"Voice ID: `{voice_id}`")
+
+            with col_preview_b:
+                if st.button(f"🔊 Preview", key=f"preview_speaker_{speaker_num}"):
+                    with st.spinner(f"Generating preview for Speaker {speaker_num + 1}..."):
+                        try:
+                            # Generate preview
+                            preview_result = asyncio.run(
+                                client.execute_function(
+                                    function_name="generate_voice_preview",
+                                    input={
+                                        "voice_id": voice_id,
+                                        "style": style,
+                                        "api_key": os.getenv("ELEVEN_LABS_API_KEY")
+                                    }
+                                )
+                            )
+
+                            # Decode and play audio
+                            audio_bytes = base64.b64decode(preview_result["audio_base64"])
+                            st.audio(audio_bytes, format="audio/mp3")
+                            st.success(f"✅ Preview generated!")
+
+                        except Exception as e:
+                            st.error(f"Failed to generate preview: {str(e)}")
+
+            st.markdown("---")
+
     # Background Music Section
     st.markdown("---")
-    st.subheader("🎵 Background Music (NEW!)")
+    st.subheader("🎵 Background Music")
 
     add_music = st.checkbox(
         "Add Background Music",

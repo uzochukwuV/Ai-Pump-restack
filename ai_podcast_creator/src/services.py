@@ -3,7 +3,7 @@ import os
 from src.client import client
 from src.workflows.podcast_workflow import PodcastCreatorWorkflow
 from src.functions.script_generator import generate_script
-from src.functions.audio_generator import generate_audio_segment, merge_audio_segments
+from src.functions.audio_generator import generate_audio_segment, merge_audio_segments, generate_voice_preview
 from watchfiles import run_process
 import webbrowser
 
@@ -14,6 +14,7 @@ async def main():
             generate_script,
             generate_audio_segment,
             merge_audio_segments,
+            generate_voice_preview,
         ],
     )
 

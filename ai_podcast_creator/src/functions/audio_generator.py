@@ -8,6 +8,7 @@ import requests
 import base64
 import io
 import os
+from typing import Dict
 
 @function.defn()
 async def generate_audio_segment(input: dict) -> dict:
@@ -245,3 +246,86 @@ async def _add_background_music(voice_audio, music_track_id: str, music_volume: 
         log.error(f"Failed to add background music: {str(e)}")
         log.warning("Returning voice audio without background music")
         return voice_audio
+
+
+# Voice preview sample texts for different styles
+PREVIEW_TEXTS: Dict[str, str] = {
+    "casual": "Hey there! Welcome to our podcast. Today we're diving into an exciting topic that I think you'll really enjoy.",
+    "professional": "Good morning and welcome to today's episode. We'll be discussing the key insights and developments in this important field.",
+    "educational": "Hello and welcome! In this lesson, we'll explore the fundamental concepts and break them down into simple, easy-to-understand terms.",
+    "energetic": "What's up everyone! We've got an amazing show lined up for you today, so buckle up and let's jump right into it!"
+}
+
+
+@function.defn()
+async def generate_voice_preview(input: dict) -> dict:
+    """
+    Generate a short voice preview for testing different voices.
+
+    Args:
+        input (dict): A dictionary containing:
+            - voice_id (str): ElevenLabs voice ID to preview
+            - style (str, optional): Podcast style for sample text
+            - custom_text (str, optional): Custom preview text
+            - api_key (str, optional): ElevenLabs API key
+
+    Returns:
+        dict: A dictionary containing base64-encoded preview audio
+    """
+    try:
+        log.info("generate_voice_preview started", voice_id=input.get("voice_id", ""))
+
+        # Extract input parameters
+        voice_id = input.get("voice_id", "")
+        style = input.get("style", "casual")
+        custom_text = input.get("custom_text")
+        api_key = input.get("api_key") or os.getenv("ELEVEN_LABS_API_KEY")
+
+        # Validate input
+        if not voice_id:
+            raise ValueError("Voice ID is missing")
+        if not api_key:
+            raise ValueError("ElevenLabs API key is missing")
+
+        # Get preview text
+        text = custom_text if custom_text else PREVIEW_TEXTS.get(style, PREVIEW_TEXTS["casual"])
+
+        # Prepare request
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": api_key
+        }
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "style": 0.5,
+                "use_speaker_boost": True
+            }
+        }
+
+        # Send the request
+        log.info(f"Generating preview with ElevenLabs API")
+        response = requests.post(url, json=data, headers=headers, stream=True)
+        response.raise_for_status()
+
+        # Collect response and encode to base64
+        content = b''.join(response.iter_content(chunk_size=1024))
+        base64_audio = base64.b64encode(content).decode('utf-8')
+
+        log.info("Voice preview generated successfully", audio_size=len(base64_audio))
+
+        return {
+            "audio_base64": base64_audio,
+            "text": text,
+            "voice_id": voice_id,
+            "style": style
+        }
+
+    except Exception as e:
+        log.error("generate_voice_preview failed", error=str(e))
+        raise e
